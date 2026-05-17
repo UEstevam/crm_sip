@@ -62,7 +62,8 @@ export function useCRMStore(): CRMStore {
   const [options, setOptions] = useState<CRMOptions>(getDefaultState().options);
   const [accounts, setAccounts] = useState<CRMAccount[]>(getDefaultState().accounts);
 
-  const load = useCallback(() => {
+  // Load persisted state apenas uma vez na montagem
+  useEffect(() => {
     const persisted = loadPersistedState();
     if (!persisted || !STORAGE_VERSION_GUARD) return;
 
@@ -77,18 +78,19 @@ export function useCRMStore(): CRMStore {
     });
   }, []);
 
-
+  // Debounce localStorage save para evitar saves frequentes
   useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    savePersistedState({ options, accounts });
+    const timer = setTimeout(() => {
+      savePersistedState({ options, accounts });
+    }, 500);
+    return () => clearTimeout(timer);
   }, [options, accounts]);
 
   const setOption = useCallback((key: keyof CRMOptions, value: string) => {
-    setOptions((prev) => upsertOption(prev, key, value));
+    setOptions((prev) => {
+      const next = upsertOption(prev, key, value);
+      return prev === next ? prev : next;
+    });
   }, []);
 
   const removeOption = useCallback(
@@ -120,7 +122,8 @@ export function useCRMStore(): CRMStore {
 
       return { ok: true as const };
     },
-    [accounts]
+    // Usar setState callback para evitar dependência em accounts
+    []
   );
 
   const renameOption = useCallback(
@@ -204,7 +207,11 @@ export function useCRMStore(): CRMStore {
       if (!id) return { ok: false as const, reason: "ID (interno) da linha é obrigatório." };
       if (!input.status.trim()) return { ok: false as const, reason: "Status é obrigatório." };
 
-      const exists = accounts.some((a) => a.id === id);
+      let exists = false;
+      setAccounts((prev) => {
+        exists = prev.some((a) => a.id === id);
+        return prev;
+      });
       if (exists) return { ok: false as const, reason: "Já existe um registro com esse ID." };
 
       // Ensure option catalogs contain referenced values
@@ -227,7 +234,7 @@ export function useCRMStore(): CRMStore {
       setAccounts((prev) => [account, ...prev].sort((a, b) => b.createdAt - a.createdAt));
       return { ok: true as const, account };
     },
-    [accounts]
+    []
   );
 
   const updateAccount = useCallback(
@@ -235,7 +242,11 @@ export function useCRMStore(): CRMStore {
       id: string,
       input: Omit<CRMAccount, "createdAt" | "updatedAt">
     ): { ok: true } | { ok: false; reason: string } => {
-      const idx = accounts.findIndex((a) => a.id === id);
+      let idx = -1;
+      setAccounts((prev) => {
+        idx = prev.findIndex((a) => a.id === id);
+        return prev;
+      });
       if (idx < 0) return { ok: false as const, reason: "Registro não encontrado." };
 
       const nomeConta = input.nomeConta.trim();
@@ -273,44 +284,36 @@ export function useCRMStore(): CRMStore {
 
       return { ok: true as const };
     },
-    [accounts]
+    []
   );
 
   const deleteAccount = useCallback(
     (id: string) => {
-      const before = accounts.length;
-      setAccounts((prev) => prev.filter((a) => a.id !== id));
-      return accounts.length === before
+      let found = false;
+      setAccounts((prev) => {
+        const next = prev.filter((a) => a.id !== id);
+        found = next.length < prev.length;
+        return next;
+      });
+      return !found
         ? { ok: false as const, reason: "Registro não encontrado." }
         : { ok: true as const };
     },
-    [accounts]
+    []
   );
 
-  return useMemo(
-    () => ({
-      options,
-      accounts,
-      setOption,
-      renameOption,
-      removeOption,
-      createAccount,
-      updateAccount,
-      deleteAccount,
-      load,
-    }),
-    [
-      options,
-      accounts,
-      setOption,
-      renameOption,
-      removeOption,
-      createAccount,
-      updateAccount,
-      deleteAccount,
-      load,
-    ]
-  );
+  // Retornar objeto simples - evita overhead do useMemo
+  return {
+    options,
+    accounts,
+    setOption,
+    renameOption,
+    removeOption,
+    createAccount,
+    updateAccount,
+    deleteAccount,
+    load: () => {}, // load já não é necessário
+  };
 }
 
 export { makeEmptyForm };
