@@ -1,15 +1,19 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 
 export default function LoginForm() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const from = searchParams.get("from") ?? "/";
+  // Avoid useSearchParams() to prevent SSR prerender issues; read from window on client
+  let from = "/";
+  if (typeof window !== "undefined") {
+    const sp = new URLSearchParams(window.location.search);
+    from = sp.get("from") ?? "/";
+  }
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
