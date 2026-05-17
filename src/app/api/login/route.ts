@@ -17,7 +17,7 @@ export async function POST(req: Request) {
   const res = NextResponse.json({ ok: true });
   res.headers.append(
     "Set-Cookie",
-    `${AUTH_COOKIE}=1; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=86400`
+    `${AUTH_COOKIE}=1; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=86400`
   );
   return res;
 }

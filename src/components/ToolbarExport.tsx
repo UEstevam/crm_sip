@@ -2,9 +2,21 @@
 
 import { Download } from "lucide-react";
 
-export function exportToCSV(filename: string, rows: Record<string, any>[]) {
-  if (!rows || rows.length === 0) {
-    const blob = new Blob([""], { type: "text/csv;charset=utf-8;" });
+export async function exportToCSV(filename: string, rows: Record<string, any>[]) {
+  // Send rows to protected server endpoint which validates auth cookie
+  try {
+    const res = await fetch("/api/export", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ filename, rows }),
+    });
+
+    if (!res.ok) {
+      const json = await res.json().catch(() => ({}));
+      throw new Error(json?.message || `Export failed (${res.status})`);
+    }
+
+    const blob = await res.blob();
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -13,29 +25,10 @@ export function exportToCSV(filename: string, rows: Record<string, any>[]) {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    return;
+  } catch (err: any) {
+    // Fallback: notify user
+    alert(err?.message || "Erro ao gerar exportação. Faça login e tente novamente.");
   }
-
-  const headers = Object.keys(rows[0]);
-  const esc = (v: any) => {
-    const s = v === null || v === undefined ? "" : String(v);
-    if (/["\n,;]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
-    return s;
-  };
-
-  const csv = [headers.join(","), ...rows.map((r) => headers.map((h) => esc(r[h])).join(","))].join(
-    "\n"
-  );
-
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
 }
 
 export function ToolbarExport({
